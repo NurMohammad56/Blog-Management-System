@@ -5,7 +5,7 @@ import crypto from "crypto";
 const userSchema = new Schema(
   {
     userName: {
-      name: String,
+      type: String,
       required: [true, "Username is required"],
       unique: true,
       trim: true,
