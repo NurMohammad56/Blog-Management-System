@@ -2,122 +2,139 @@ import { User } from "../models/userModel.js";
 import { AppError } from "../utils/AppError.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { asyncHandler } from "../utils/AsyncHandler.js";
 
 export class UserService {
-  static register = asyncHandler(async (userdata) => {
-    const existingUser = await User.findOne({
-      $or: [{ email: userdata.email }, { userName: userdata.userName }],
-    });
+  static async register(userdata) {
+    try {
+      const existingUser = await User.findOne({
+        $or: [{ email: userdata.email }, { userName: userdata.userName }],
+      });
 
-    if (existingUser) {
-      if (existingUser.email === userdata.email) {
-        throw new AppError("Email already exists", 400);
+      if (existingUser) {
+        if (existingUser.email === userdata.email) {
+          throw new AppError("Email already exists", 400);
+        }
+        if (existingUser.userName === userdata.userName) {
+          throw new AppError("Username already exists", 400);
+        }
       }
 
-      if (existingUser.userName === userdata.userName) {
-        throw new AppError("Username already exists", 400);
+      const user = await User.create({
+        userName: userdata.userName,
+        email: userdata.email,
+        password: userdata.password,
+        firstName: userdata.firstName,
+        lastName: userdata.lastName,
+      });
+
+      const token = this.generateToken(user._id);
+      user.password = undefined;
+
+      return { user, token };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async login({ identifier, password }) {
+    try {
+      const user = await User.findByEmailOrUsername(identifier);
+
+      if (!user) {
+        throw new AppError("User not found", 404);
       }
+
+      if (user.isLocked()) {
+        throw new AppError(
+          "Account is temporarily locked. Try again later",
+          401,
+        );
+      }
+
+      const isPasswordValid = await user.comparePassword(password);
+
+      if (!isPasswordValid) {
+        await user.incrementLoginAttempts();
+        throw new AppError("Invalid credentials", 401);
+      }
+
+      await user.updateOne({
+        $set: { lastLogin: new Date() },
+        $unset: { lockUntil: 1, loginAttempts: 1 },
+      });
+
+      const token = this.generateToken(user._id);
+      user.password = undefined;
+
+      return { user, token };
+    } catch (error) {
+      throw error;
     }
+  }
 
-    const user = await User.create({
-      useName: userdata.userName,
-      email: userdata.email,
-      password: userdata.password,
-      firstName: userdata.firstName,
-      lastName: userdata.lastName,
-    });
-
-    const token = this.generateToken(user._id);
-
-    user.password = undefined;
-
-    return { user, token };
-  });
-
-  static login = asyncHandler(async (identifier, password) => {
-    const user = await User.findByEmailOrUsername(identifier);
-
-    if (!user) {
-      throw new AppError("User not found", 404);
-    }
-
-    if (user.isLocked()) {
-      throw new AppError("Account is temporarily locked. Try again later", 401);
-    }
-
-    const isPasswordValid = await user.comparePassword(password);
-
-    if (!isPasswordValid) {
-      await user.incrementLoginAttempts();
-      throw new AppError("Invalid credentials", 401);
-    }
-
-    await user.updateOne({
-      $set: { lastLogin: new Date() },
-      $unset: { lockUntil: 1, loginAttempts: 1 },
-    });
-
-    const token = this.generateToken(user._id);
-
-    user.password = undefined;
-
-    return (user, token);
-  });
-
-  // Generate JWT Token
-  static generateToken = (userId) => {
+  static generateToken(userId) {
     return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
-  };
+  }
 
-  // Verify JWT Token
-  static verifyToken = asyncHandler((token) => {
-    return jwt.verify(token, process.env.JWT_SECRET);
-  });
-
-  static getProfile = asyncHandler(async (userId) => {
-    const user = await User.findById(userId).select(
-      "-password -__v -loginAttempts -lockUntil",
-    );
-
-    if (!user) {
-      throw new AppError("User not found", 404);
+  static verifyToken(token) {
+    try {
+      return jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      throw new AppError("Invalid or expired token", 401);
     }
+  }
 
-    return user;
-  });
+  static async getProfile(userId) {
+    try {
+      const user = await User.findById(userId).select(
+        "-password -__v -loginAttempts -lockUntil",
+      );
 
-  static updateProfile = asyncHandler(async (userId, data) => {
-    const restrictedFields = [
-      "password",
-      "email",
-      "role",
-      "isActive",
-      "isVerified",
-      "lastLoginAt",
-      "loginAttempts",
-      "lockUntil",
-    ];
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
 
-    restrictedFields.forEach((field) => delete data[field]);
-
-    const user = await User.findByIdAndUpdate(userId, data, {
-      new: true,
-      runValidators: true,
-    }).select("-password -__v");
-
-    if (!user) {
-      throw new AppError("User not found", 404);
+      return user;
+    } catch (error) {
+      throw error;
     }
+  }
 
-    return user;
-  });
+  static async updateProfile({ userId, data }) {
+    try {
+      const restrictedFields = [
+        "password",
+        "email",
+        "role",
+        "isActive",
+        "isVerified",
+        "lastLoginAt",
+        "loginAttempts",
+        "lockUntil",
+      ];
 
-  static changePassword = asyncHandler(
-    async (userId, currentPassword, newPassword) => {
-      const user = await User.findById(userId);
+      restrictedFields.forEach((field) => delete data[field]);
+
+      const user = await User.findByIdAndUpdate(userId, data, {
+        new: true,
+        runValidators: true,
+      }).select("-password -__v");
+
+      if (!user) {
+        throw new AppError("User not found", 404);
+      }
+
+      return user;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  static async changePassword({ userId, currentPassword, newPassword }) {
+    try {
+      const user = await User.findById(userId).select("+password");
 
       if (!user) {
         throw new AppError("User not found", 404);
@@ -133,72 +150,82 @@ export class UserService {
       await user.save();
 
       const token = this.generateToken(user._id);
+      user.password = undefined;
 
       return { user, token };
-    },
-  );
-
-  static forgotPassword = asyncHandler(async (email) => {
-    const user = await User.findOne({ email });
-
-    if (!user) {
-      return { message: "If email exist, reset instruction sent" };
+    } catch (error) {
+      throw error;
     }
+  }
 
-    const resetToken = user.createPasswordResetToken();
+  static async forgotPassword({ email }) {
+    try {
+      const user = await User.findOne({ email });
 
-    await user.save({ validateBeforeSave: false });
+      if (!user) {
+        return { message: "If email exists, reset instructions sent" };
+      }
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+      const resetToken = user.createPasswordResetToken();
+      await user.save({ validateBeforeSave: false });
 
-    console.log(`Password reset URL: ${resetUrl}`);
+      const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+      console.log("Password reset URL:", resetUrl);
 
-    return { message: "If email exist, reset instruction sent" };
-  });
-
-  static resetPassword = asyncHandler(async (resetToken, newPassword) => {
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      throw new AppError("Token is invalid or has expired", 400);
+      return { message: "If email exists, reset instructions sent" };
+    } catch (error) {
+      throw error;
     }
+  }
 
-    user.password = newPassword;
+  static async resetPassword({ resetToken, newPassword }) {
+    try {
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
 
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
+      const user = await User.findOne({
+        passwordResetToken: hashedToken,
+        passwordResetExpires: { $gt: Date.now() },
+      });
 
-    await user.save();
+      if (!user) {
+        throw new AppError("Token is invalid or has expired", 400);
+      }
 
-    const token = this.generateToken(user._id);
+      user.password = newPassword;
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
 
-    return { user, token };
-  });
+      await user.save();
 
-  static getAllUser = asyncHandler(async (query = {}) => {
-    const { search = {}, page = 1, limit = 10 } = query;
+      const token = this.generateToken(user._id);
+      user.password = undefined;
 
-    const filter = {};
-
-    if (search) {
-      filter.$or = [
-        { userName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { firstName: { $regex: search, $options: "i" } },
-        { lastName: { $regex: search, $options: "i" } },
-      ];
+      return { user, token };
+    } catch (error) {
+      throw error;
     }
+  }
 
-    const result = await User.getPaginated(filter, page, limit);
+  static async getAllUser(query = {}) {
+    try {
+      const { search = "", page = 1, limit = 10 } = query;
+      const filter = {};
 
-    return result;
-  });
+      if (search) {
+        filter.$or = [
+          { userName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { firstName: { $regex: search, $options: "i" } },
+          { lastName: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      return await User.getPaginated(filter, page, limit);
+    } catch (error) {
+      throw error;
+    }
+  }
 }
