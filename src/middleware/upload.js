@@ -1,8 +1,9 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { AppError } from "../utils/AppError.js";
+import fsPromises from "fs/promises";
 import sharp from "sharp";
+import { AppError } from "../utils/AppError.js";
 
 const uploadDirs = {
   avatars: "public/uploads/avatars",
@@ -16,64 +17,88 @@ Object.values(uploadDirs).forEach((dir) => {
   }
 });
 
-const storage = multer.diskStorage({
-  destination: (req, res, cb) => {
-    let folder = "general";
-
-    if (file.fieldname === "avatar") {
-      folder = "avatars";
-    } else if (file.fieldname === "coverImage") {
-      folder = "posts";
-    }
-
-    cb(null, uploadDirs[folder]);
-  },
-
-  filename: (req, res, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-
-    const filename = `${file.fieldname}-${uniqueSuffix}${ext}`;
-
-    cb(null, filename);
-  },
-});
-
-const processImage = (width = 800, height = 800) => {
-  return async (req, res, next) => {
-    if (!req.file) return next();
-
-    try {
-      const filePath = req.file.path;
-
-      await sharp(filePath)
-        .resize(width, height, {
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .png({ quality: 80 })
-        .webp({ quality: 80 })
-        .toFile(filePath);
-
-      next();
-    } catch (error) {
-      next(new AppError("Failed to process image", 500));
+const fileFilter = (allowedMimeTypes) => {
+  return (req, file, cb) => {
+    if (allowedMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(
+        new AppError(
+          `Invalid file type: ${file.mimetype}. Only images are allowed.`,
+          400,
+        ),
+        false,
+      );
     }
   };
 };
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    let folder = uploadDirs.general;
+
+    if (file.fieldname === "avatar") {
+      folder = uploadDirs.avatars;
+    } else if (file.fieldname === "coverImage") {
+      folder = uploadDirs.posts;
+    }
+
+    cb(null, folder);
+  },
+
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `${file.fieldname}-${Date.now()}-${Math.round(
+      Math.random() * 1e9,
+    )}${ext}`;
+
+    cb(null, uniqueName);
+  },
+});
+
+export const processImage =
+  (width = 800, height = 800) =>
+  async (req, res, next) => {
+    if (!req.file) return next();
+
+    try {
+      const inputPath = req.file.path;
+      const outputPath = inputPath.replace(path.extname(inputPath), ".webp");
+
+      await sharp(inputPath)
+        .resize(width, height, {
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .toFormat("webp", { quality: 80 })
+        .toFile(outputPath);
+
+      // Remove original file (NON-BLOCKING)
+      await fsPromises.unlink(inputPath);
+
+      // Update req.file with optimized image info
+      req.file.path = outputPath;
+      req.file.filename = path.basename(outputPath);
+
+      next();
+    } catch (error) {
+      next(new AppError("Image processing failed", 500));
+    }
+  };
+
+// Avatar upload (single image)
 export const uploadAvatar = multer({
-  storage: storage,
+  storage,
   fileFilter: fileFilter(["image/jpeg", "image/png", "image/webp"]),
   limits: {
-    fileSize: 2 * 1024 * 1024,
+    fileSize: 2 * 1024 * 1024, // 2MB
     files: 1,
   },
 });
 
+// Post image upload (single image)
 export const uploadPostImage = multer({
-  storage: storage,
+  storage,
   fileFilter: fileFilter([
     "image/jpeg",
     "image/png",
@@ -81,16 +106,17 @@ export const uploadPostImage = multer({
     "image/gif",
   ]),
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024, // 5MB
     files: 1,
   },
 });
 
+// Multiple images upload
 export const uploadMultiple = multer({
-  storage: storage,
+  storage,
   fileFilter: fileFilter(["image/jpeg", "image/png", "image/webp"]),
   limits: {
-    fileSize: 10 * 1024 * 1024,
+    fileSize: 10 * 1024 * 1024, // 10MB
     files: 5,
   },
 });

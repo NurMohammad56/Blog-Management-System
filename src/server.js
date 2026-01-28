@@ -7,56 +7,61 @@ dotenv.config();
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI;
 
+let server;
+
 mongoose
   .connect(MONGO_URI)
   .then(() => {
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
+    console.log("MongoDB connected");
+
+    server = app.listen(PORT, () => {
+      console.log(`
+Server Started Successfully
+===============================
+Environment: ${process.env.NODE_ENV || "development"}
+Port: ${PORT}
+URL: http://localhost:${PORT}
+PID: ${process.pid}
+      `);
     });
   })
   .catch((error) => {
-    console.log(error);
+    console.error("❌ MongoDB connection failed:", error);
+    process.exit(1);
   });
 
 mongoose.connection.on("error", (error) => {
-  console.log("MongoDB connection error:", error);
+  console.error("MongoDB runtime error:", error);
 });
 
 mongoose.connection.on("disconnected", () => {
-  console.log("MongoDB disconnected");
-});
-
-const server = app.listen(PORT, () => {
-  console.log(`
-🚀 Server Started Successfully
-===============================
-Environment: ${process.env.NODE_ENV}
-Port: ${PORT}
-URL: http://localhost:${PORT}
-Database: ${MONGO_URI.split("@")[1] || "local"}
-PID: ${process.pid}
-    `);
+  console.warn("MongoDB disconnected");
 });
 
 const shutdown = (signal) => {
-  console.log(`Received ${signal}. Closing server gracefully...`);
+  console.log(`\n Received ${signal}. Shutting down gracefully...`);
+
+  if (!server) {
+    process.exit(1);
+  }
+
   server.close(() => {
-    mongoose.connection.close(() => {
-      console.log("MongoDB connection closed");
+    console.log("HTTP server closed");
+
+    mongoose.connection.close(false, () => {
+      console.log("🗄️ MongoDB connection closed");
       process.exit(0);
     });
   });
 
   setTimeout(() => {
-    console.error(
-      "Could not close connections in time, forcefully shutting down",
-    );
+    console.error("Force shutdown due to timeout");
     process.exit(1);
   }, 5000);
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGINT", shutdown); // Ctrl + C
+process.on("SIGTERM", shutdown); // Docker / PM2 / Kubernetes
 
 process.on("uncaughtException", (err) => {
   console.error("Uncaught Exception:", err);

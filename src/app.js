@@ -9,58 +9,64 @@ import mongoSanitize from "express-mongo-sanitize";
 import xss from "xss-clean";
 import hpp from "hpp";
 import cookieParser from "cookie-parser";
-import mongoSanitize from "express-mongo-sanitize";
+
+import { fileURLToPath } from "url";
+import { dirname } from "path";
 
 import routeConfig from "./config/routeConfig.js";
-
 import errorHandler from "./middlewares/errorHandler.js";
 import { requestLogger } from "./middlewares/requestLogger.js";
 import { responseHelpers } from "./utils/ResponseHelper.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
 
-const limiter = rateLimit({
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   message: "Too many requests from this IP, please try again later.",
-  standardsHeaders: true,
+  standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use("/api/v1", limiter);
+app.use("/api/v1", apiLimiter);
 
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: process.env.NODE_ENV === "production",
     crossOriginEmbedderPolicy: false,
   }),
 );
 
-app.use(xss());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    credentials: true,
+  }),
+);
 
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+app.use(morgan("dev"));
+app.use(requestLogger);
+
+app.use(responseHelpers);
+
+app.use(mongoSanitize());
+app.use(xss());
 app.use(
   hpp({
     whitelist: ["category", "tags", "sort", "limit", "page"],
   }),
 );
 
-app.use(mongoSanitize());
-
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-    credentials: true,
-  }),
-);
-
 app.use(compression());
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
-
 app.use(express.static(path.join(__dirname, "public")));
-
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "..", "public", "uploads")),
@@ -71,20 +77,17 @@ app.use(routeConfig);
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "healthy",
-    timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
   });
 });
 
-app.use("*", (req, res, next) => {
+app.use((req, res, next) => {
   const error = new Error(`Cannot find ${req.originalUrl} on this server`);
   error.statusCode = 404;
   next(error);
 });
 
 app.use(errorHandler);
-
-app.use(requestLogger);
-app.use(responseHelpers);
 
 export default app;
