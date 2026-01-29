@@ -123,12 +123,12 @@ commentSchema.pre("save", async function (next) {
   }
 
   // Update post comment count
-  if (!this.isNew) {
+  if (this.isNew) {
     const post = mongoose.model("Post");
     await post.findByIdAndUpdate(this.post, { $inc: { commentsCount: 1 } });
 
     // Update parant comment replies count
-    if (this.parantComment) {
+    if (this.parentComment) {
       await mongoose
         .model("Comment")
         .findByIdAndUpdate(this.parentComment, { $inc: { repliesCount: 1 } });
@@ -239,7 +239,9 @@ commentSchema.statics = {
 
     if (!comment) throw new Error("Comment not found");
 
-    const likeIndex = comment.likes.indexOf(userId);
+    const likeIndex = comment.likes.findIndex(
+      (id) => id.toString() === userId.toString(),
+    );
 
     if (likeIndex > -1) {
       comment.likes.splice(likeIndex, 1);
@@ -252,7 +254,7 @@ commentSchema.statics = {
   },
 
   async reportComment(commentId, userId, reason) {
-    const comment = this.findById(commentId);
+    const comment = await this.findById(commentId);
 
     if (!comment) throw new Error("Comment not found");
 
