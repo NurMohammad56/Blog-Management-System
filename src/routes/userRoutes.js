@@ -2,9 +2,9 @@ import express from "express";
 const router = express.Router();
 
 import { UserController } from "../controllers/userController.js";
-import { authenticate, authorize } from "../middlewares/auth.js";
+import { authenticate, authorize } from "../middleware/auth.js";
 import { validate } from "../middlewares/validation.js";
-import { uploadAvatar } from "../middlewares/upload.js";
+import { uploadAvatar } from "../middleware/upload.js";
 
 // Public routes
 router.post("/register", validate("register"), UserController.register);

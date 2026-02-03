@@ -1,8 +1,5 @@
 import { UserService } from "../services/userService.js";
 import { asyncHandler } from "../utils/AsyncHandler.js";
-import { AppError } from "../utils/AppError.js";
-import { responseHelpers } from "../utils/ResponseHelper.js";
-import { User } from "../models/userModel.js";
 
 export class UserController {
   static register = asyncHandler(async (req, res) => {
