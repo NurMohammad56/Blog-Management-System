@@ -1,5 +1,5 @@
 import express from "express";
-import { CommentController } from "../controllers/commentController";
+import { CommentController } from "../controllers/commentController.js";
 import { validate } from "../middleware/validation.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 

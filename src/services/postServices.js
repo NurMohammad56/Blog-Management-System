@@ -1,5 +1,5 @@
 import { Post } from "../models/postModel.js";
-import User from "../models/userModel.js";
+import { User } from "../models/userModel.js";
 import { AppError } from "../utils/AppError.js";
 import { Comment } from "../models/commentModel.js";
 import fs from "fs";
@@ -107,7 +107,7 @@ export class PostService {
 
       return post;
     } catch (error) {
-      onsole.error("PostService.getPostById error:", error.message);
+      console.error("PostService.getPostById error:", error.message);
 
       if (error instanceof AppError) {
         throw error;
