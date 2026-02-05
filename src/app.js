@@ -14,8 +14,8 @@ import { fileURLToPath } from "url";
 import { dirname } from "path";
 
 import routeConfig from "./config/routeConfig.js";
-import errorHandler from "./middlewares/errorHandler.js";
-import { requestLogger } from "./middlewares/requestLogger.js";
+import errorHandler from "./middleware/errorHandler.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 import { responseHelpers } from "./utils/ResponseHelper.js";
 
 const __filename = fileURLToPath(import.meta.url);

@@ -3,7 +3,7 @@ import { Post } from "../models/postModel.js";
 import { User } from "../models/userModel.js";
 import { AppError } from "../utils/AppError.js";
 
-export class commentService {
+export class CommentService {
   static async createComment(authorId, commentData) {
     try {
       const post = await Post.findById(commentData.post);
@@ -47,7 +47,7 @@ export class commentService {
         }
       }
 
-      const comment = await Comment.creare({
+      const comment = await Comment.create({
         ...commentData,
         author: authorId,
       });
@@ -156,7 +156,7 @@ export class commentService {
 
       const isAuthor = comment.author.toString() === userId.toString();
       const isAdmin = await this.checkAdmin(userId);
-      const isPostAuthor = await this.checkPostAuthor(comment.post.userId);
+      const isPostAuthor = await this.checkPostAuthor(comment.post, userId);
 
       if (!isAuthor && !isAdmin && !isPostAuthor) {
         throw new AppError("You are not allowed to delete this comment", 403);
@@ -187,7 +187,7 @@ export class commentService {
         throw new AppError("Comment not found", 404);
       }
 
-      const liked = comment.likes.inclued((id) => id.toString() === userId);
+      const liked = comment.likes.includes((id) => id.toString() === userId);
 
       return {
         liked,

@@ -3,7 +3,7 @@ const router = express.Router();
 
 import { UserController } from "../controllers/userController.js";
 import { authenticate, authorize } from "../middleware/auth.js";
-import { validate } from "../middlewares/validation.js";
+import { validate } from "../middleware/validation.js";
 import { uploadAvatar } from "../middleware/upload.js";
 
 // Public routes
@@ -44,13 +44,6 @@ router.put(
 router.get("/logout", authenticate, UserController.logout);
 
 // Admin only routes
-router.get("/", authenticate, authorize("admin"), UserController.getAllUsers);
-
-router.get(
-  "/:id",
-  authenticate,
-  authorize("admin"),
-  UserController.getUserById,
-);
+router.get("/", authenticate, authorize("admin"), UserController.getAllUser);
 
 export default router;

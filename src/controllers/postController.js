@@ -1,6 +1,5 @@
-import { PostService } from "../services/postService.js";
 import { asyncHandler } from "../utils/AsyncHandler.js";
-import { Post } from "../models/postModel";
+import { PostService } from "../services/postServices.js";
 
 export class PostController {
   static createpost = asyncHandler(async (req, res) => {

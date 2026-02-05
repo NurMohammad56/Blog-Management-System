@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI = process.env.MONGODB_URI;
 
 let server;
 
@@ -26,7 +26,7 @@ PID: ${process.pid}
     });
   })
   .catch((error) => {
-    console.error("❌ MongoDB connection failed:", error);
+    console.error("MongoDB connection failed:", error);
     process.exit(1);
   });
 
