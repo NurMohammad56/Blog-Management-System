@@ -10,16 +10,12 @@ import xss from "xss-clean";
 import hpp from "hpp";
 import cookieParser from "cookie-parser";
 
-import { fileURLToPath } from "url";
-import { dirname } from "path";
 
 import routeConfig from "./config/routeConfig.js";
 import errorHandler from "./middleware/errorHandler.js";
 import { requestLogger } from "./middleware/requestLogger.js";
 import { responseHelpers } from "./utils/ResponseHelper.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const app = express();
 
